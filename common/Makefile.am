@@ -14,6 +14,7 @@ libxfdesktop_la_SOURCES = \
 libxfdesktop_la_CFLAGS = \
 	-I$(top_srcdir)/src \
 	$(LIBXFCE4UTIL_CFLAGS) \
+	$(LIBXFCE4UI_CFLAGS) \
 	$(GTK_CFLAGS) \
 	-DDBUS_API_SUBJECT_TO_CHANGE \
 	$(DBUS_CFLAGS)
