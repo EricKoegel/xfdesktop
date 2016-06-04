@@ -172,6 +172,193 @@ static guint backdrop_signals[LAST_SIGNAL] = { 0, };
 
 /* helper functions */
 
+#if !GTK_CHECK_VERSION (3, 0, 0)
+/* pull in gdk_pixbuf_get_from_surface from the future!
+ * When we finally flip to Gtk3 delete all this stuff. */
+static cairo_format_t
+gdk_cairo_format_for_content (cairo_content_t content)
+{
+  switch (content)
+    {
+    case CAIRO_CONTENT_COLOR:
+      return CAIRO_FORMAT_RGB24;
+    case CAIRO_CONTENT_ALPHA:
+      return CAIRO_FORMAT_A8;
+    case CAIRO_CONTENT_COLOR_ALPHA:
+    default:
+      return CAIRO_FORMAT_ARGB32;
+    }
+}
+
+static cairo_surface_t *
+gdk_cairo_surface_coerce_to_image (cairo_surface_t *surface,
+                                   cairo_content_t  content,
+                                   int              src_x,
+                                   int              src_y,
+                                   int              width,
+                                   int              height)
+{
+  cairo_surface_t *copy;
+  cairo_t *cr;
+
+  copy = cairo_image_surface_create (gdk_cairo_format_for_content (content),
+                                     width,
+                                     height);
+
+  cr = cairo_create (copy);
+  cairo_set_operator (cr, CAIRO_OPERATOR_SOURCE);
+  cairo_set_source_surface (cr, surface, -src_x, -src_y);
+  cairo_paint (cr);
+  cairo_destroy (cr);
+
+  return copy;
+}
+
+static void
+convert_alpha (guchar *dest_data,
+               int     dest_stride,
+               guchar *src_data,
+               int     src_stride,
+               int     src_x,
+               int     src_y,
+               int     width,
+               int     height)
+{
+  int x, y;
+
+  src_data += src_stride * src_y + src_x * 4;
+
+  for (y = 0; y < height; y++) {
+    guint32 *src = (guint32 *) src_data;
+
+    for (x = 0; x < width; x++) {
+      guint alpha = src[x] >> 24;
+
+      if (alpha == 0)
+        {
+          dest_data[x * 4 + 0] = 0;
+          dest_data[x * 4 + 1] = 0;
+          dest_data[x * 4 + 2] = 0;
+        }
+      else
+        {
+          dest_data[x * 4 + 0] = (((src[x] & 0xff0000) >> 16) * 255 + alpha / 2) / alpha;
+          dest_data[x * 4 + 1] = (((src[x] & 0x00ff00) >>  8) * 255 + alpha / 2) / alpha;
+          dest_data[x * 4 + 2] = (((src[x] & 0x0000ff) >>  0) * 255 + alpha / 2) / alpha;
+        }
+      dest_data[x * 4 + 3] = alpha;
+    }
+
+    src_data += src_stride;
+    dest_data += dest_stride;
+  }
+}
+
+static void
+convert_no_alpha (guchar *dest_data,
+                  int     dest_stride,
+                  guchar *src_data,
+                  int     src_stride,
+                  int     src_x,
+                  int     src_y,
+                  int     width,
+                  int     height)
+{
+  int x, y;
+
+  src_data += src_stride * src_y + src_x * 4;
+
+  for (y = 0; y < height; y++) {
+    guint32 *src = (guint32 *) src_data;
+
+    for (x = 0; x < width; x++) {
+      dest_data[x * 3 + 0] = src[x] >> 16;
+      dest_data[x * 3 + 1] = src[x] >>  8;
+      dest_data[x * 3 + 2] = src[x];
+    }
+
+    src_data += src_stride;
+    dest_data += dest_stride;
+  }
+}
+
+/**
+ * gdk_pixbuf_get_from_surface:
+ * @surface: surface to copy from
+ * @src_x: Source X coordinate within @surface
+ * @src_y: Source Y coordinate within @surface
+ * @width: Width in pixels of region to get
+ * @height: Height in pixels of region to get
+ *
+ * Transfers image data from a #cairo_surface_t and converts it to an RGB(A)
+ * representation inside a #GdkPixbuf. This allows you to efficiently read
+ * individual pixels from cairo surfaces. For #GdkWindows, use
+ * gdk_pixbuf_get_from_window() instead.
+ *
+ * This function will create an RGB pixbuf with 8 bits per channel.
+ * The pixbuf will contain an alpha channel if the @surface contains one.
+ *
+ * Returns: (nullable) (transfer full): A newly-created pixbuf with a
+ *     reference count of 1, or %NULL on error
+ */
+static GdkPixbuf *
+gdk_pixbuf_get_from_surface  (cairo_surface_t *surface,
+                              gint             src_x,
+                              gint             src_y,
+                              gint             width,
+                              gint             height)
+{
+  cairo_content_t content;
+  GdkPixbuf *dest;
+
+  /* General sanity checks */
+  g_return_val_if_fail (surface != NULL, NULL);
+  g_return_val_if_fail (width > 0 && height > 0, NULL);
+
+  content = cairo_surface_get_content (surface) | CAIRO_CONTENT_COLOR;
+  dest = gdk_pixbuf_new (GDK_COLORSPACE_RGB,
+                         !!(content & CAIRO_CONTENT_ALPHA),
+                         8,
+                         width, height);
+
+  if (cairo_surface_get_type (surface) == CAIRO_SURFACE_TYPE_IMAGE &&
+      cairo_image_surface_get_format (surface) == gdk_cairo_format_for_content (content))
+    surface = cairo_surface_reference (surface);
+  else
+    {
+      surface = gdk_cairo_surface_coerce_to_image (surface, content,
+						   src_x, src_y,
+						   width, height);
+      src_x = 0;
+      src_y = 0;
+    }
+  cairo_surface_flush (surface);
+  if (cairo_surface_status (surface) || dest == NULL)
+    {
+      cairo_surface_destroy (surface);
+      return NULL;
+    }
+
+  if (gdk_pixbuf_get_has_alpha (dest))
+    convert_alpha (gdk_pixbuf_get_pixels (dest),
+                   gdk_pixbuf_get_rowstride (dest),
+                   cairo_image_surface_get_data (surface),
+                   cairo_image_surface_get_stride (surface),
+                   src_x, src_y,
+                   width, height);
+  else
+    convert_no_alpha (gdk_pixbuf_get_pixels (dest),
+                      gdk_pixbuf_get_rowstride (dest),
+                      cairo_image_surface_get_data (surface),
+                      cairo_image_surface_get_stride (surface),
+                      src_x, src_y,
+                      width, height);
+
+  cairo_surface_destroy (surface);
+  return dest;
+}
+#endif /* GTK_CHECK_VERSION */
+
 static GdkPixbuf *
 create_solid(GdkColor *color,
              gint width,
@@ -179,16 +366,34 @@ create_solid(GdkColor *color,
              gboolean has_alpha,
              gint alpha)
 {
+    GdkWindow *root;
     GdkPixbuf *pix;
-    guint32 rgba;
-    
-    pix = gdk_pixbuf_new(GDK_COLORSPACE_RGB, has_alpha, 8, width, height);
-    
-    rgba = ((((color->red & 0xff00) << 8) | ((color->green & 0xff00))
-            | ((color->blue & 0xff00) >> 8)) << 8) | alpha;
-    
-    gdk_pixbuf_fill(pix, rgba);
-    
+    cairo_surface_t *surface;
+    cairo_t *cr;
+
+    root = gdk_screen_get_root_window(gdk_screen_get_default ());
+    surface = gdk_window_create_similar_surface(root, CAIRO_CONTENT_COLOR_ALPHA, width, height);
+    cr = cairo_create(surface);
+
+    if(has_alpha)
+    {
+        cairo_set_source_rgba(cr, (float)color->red/65535.0f, (float)color->green/65535.0f, (float)color->blue/65535.0f, (float)alpha/65535.0f);
+    }
+    else
+    {
+        cairo_set_source_rgb(cr, (float)color->red/65535.0f, (float)color->green/65535.0f, (float)color->blue/65535.0f);
+    }
+
+    cairo_rectangle(cr, 0, 0, width, height);
+    cairo_fill(cr);
+
+    cairo_surface_flush(surface);
+
+    pix = gdk_pixbuf_get_from_surface(surface, 0, 0, width, height);
+
+    cairo_destroy(cr);
+    cairo_surface_destroy(surface);
+
     return pix;
 }
 
@@ -196,61 +401,43 @@ static GdkPixbuf *
 create_gradient(GdkColor *color1, GdkColor *color2, gint width, gint height,
         XfceBackdropColorStyle style)
 {
+    GdkWindow *root;
     GdkPixbuf *pix;
-    gint i, j;
-    GdkPixdata pixdata;
-    guint8 rgb[3];
-    GError *err = NULL;
-    
+    cairo_surface_t *surface;
+    cairo_pattern_t *pat;
+    cairo_t *cr;
+
     g_return_val_if_fail(color1 != NULL && color2 != NULL, NULL);
     g_return_val_if_fail(width > 0 && height > 0, NULL);
-    g_return_val_if_fail(style == XFCE_BACKDROP_COLOR_HORIZ_GRADIENT
-            || style == XFCE_BACKDROP_COLOR_VERT_GRADIENT, NULL);
-    
-    pixdata.magic = GDK_PIXBUF_MAGIC_NUMBER;
-    pixdata.length = GDK_PIXDATA_HEADER_LENGTH + (width * height * 3);
-    pixdata.pixdata_type = GDK_PIXDATA_COLOR_TYPE_RGB
-            | GDK_PIXDATA_SAMPLE_WIDTH_8 | GDK_PIXDATA_ENCODING_RAW;
-    pixdata.rowstride = width * 3;
-    pixdata.width = width;
-    pixdata.height = height;
-    pixdata.pixel_data = g_malloc(width * height * 3);
+    g_return_val_if_fail(style == XFCE_BACKDROP_COLOR_HORIZ_GRADIENT || style == XFCE_BACKDROP_COLOR_VERT_GRADIENT, NULL);
 
-    if(style == XFCE_BACKDROP_COLOR_HORIZ_GRADIENT) {
-        for(i = 0; i < width; i++) {
-            rgb[0] = (color1->red + (i * (color2->red - color1->red) / width)) >> 8;
-            rgb[1] = (color1->green + (i * (color2->green - color1->green) / width)) >> 8;
-            rgb[2] = (color1->blue + (i * (color2->blue - color1->blue) / width)) >> 8;
-            memcpy(pixdata.pixel_data+(i*3), rgb, 3);
-        }
-        
-        for(i = 1; i < height; i++) {
-            memcpy(pixdata.pixel_data+(i*pixdata.rowstride),
-                    pixdata.pixel_data, pixdata.rowstride);
-        }
-    } else if(XFCE_BACKDROP_COLOR_TRANSPARENT == style)
-        memset(pixdata.pixel_data, 0x0, width * height * 3);
-    else {
-        for(i = 0; i < height; i++) {
-            rgb[0] = (color1->red + (i * (color2->red - color1->red) / height)) >> 8;
-            rgb[1] = (color1->green + (i * (color2->green - color1->green) / height)) >> 8;
-            rgb[2] = (color1->blue + (i * (color2->blue - color1->blue) / height)) >> 8;
-            for(j = 0; j < width; j++)
-                memcpy(pixdata.pixel_data+(i*pixdata.rowstride)+(j*3), rgb, 3);
-        }
+    root = gdk_screen_get_root_window(gdk_screen_get_default ());
+    surface = gdk_window_create_similar_surface(root, CAIRO_CONTENT_COLOR_ALPHA, width, height);
+    cr = cairo_create(surface);
+
+    if(style == XFCE_BACKDROP_COLOR_VERT_GRADIENT) {
+        pat = cairo_pattern_create_linear (0.0, 0.0,  0.0, height);
+    } else if(style == XFCE_BACKDROP_COLOR_HORIZ_GRADIENT) {
+        pat = cairo_pattern_create_linear (0.0, 0.0,  width, 0.0);
+    } else {
+        return NULL;
     }
 
-G_GNUC_BEGIN_IGNORE_DEPRECATIONS
-    pix = gdk_pixbuf_from_pixdata(&pixdata, TRUE, &err);
-G_GNUC_END_IGNORE_DEPRECATIONS
-    if(!pix) {
-        g_warning("%s: Unable to create color gradient: %s\n", PACKAGE,
-                err->message);
-        g_error_free(err);
-    }
-    
-    g_free(pixdata.pixel_data);
-    
+    cairo_pattern_add_color_stop_rgba (pat, 1, (float)color2->red/65535.0f, (float)color2->green/65535.0f, (float)color2->blue/65535.0f, 1);
+    cairo_pattern_add_color_stop_rgba (pat, 0, (float)color1->red/65535.0f, (float)color1->green/65535.0f, (float)color1->blue/65535.0f, 1);
+
+    cairo_rectangle(cr, 0, 0, width, height);
+    cairo_set_source(cr, pat);
+    cairo_fill(cr);
+
+    cairo_surface_flush(surface);
+
+    pix = gdk_pixbuf_get_from_surface(surface, 0, 0, width, height);
+
+    cairo_destroy(cr);
+    cairo_pattern_destroy(pat);
+    cairo_surface_destroy(surface);
+
     return pix;
 }
 
