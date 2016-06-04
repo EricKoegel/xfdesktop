@@ -147,6 +147,41 @@ menulist_set_label_flags(GtkWidget *widget, gpointer data)
     }
 }
 
+/* Adapted from garcon_gtk_menu_create_menu_item because I don't want
+ * to write it over and over.
+ */
+static GtkWidget*
+garcon_gtk_menu_create_menu_item (const gchar *name,
+                                  GtkWidget   *image)
+{
+    GtkWidget *mi;
+    GtkWidget *box;
+    GtkWidget *label;
+
+    /* create item */
+    mi = gtk_menu_item_new ();
+    label = gtk_label_new (NULL);
+    gtk_label_set_markup (GTK_LABEL (label), name);
+    gtk_label_set_justify (GTK_LABEL (label), GTK_JUSTIFY_LEFT);
+#if GTK_CHECK_VERSION (3, 0, 0)
+    box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_set_halign (label, GTK_ALIGN_START);
+#else /* GTK_CHECK_VERSION */
+    box = gtk_hbox_new (FALSE, 0);
+    gtk_misc_set_alignment (GTK_MISC (label), 0, 0.5f);
+#endif /* GTK_CHECK_VERSION */
+
+    gtk_widget_show (image);
+
+    /* Add the image and label to the box, add the box to the menu item */
+    gtk_box_pack_start (GTK_BOX (box), image, FALSE, FALSE, 0);
+    gtk_box_pack_start (GTK_BOX (box), label, TRUE, TRUE, 6);
+    gtk_widget_show_all (box);
+    gtk_container_add (GTK_CONTAINER (mi), box);
+
+    return mi;
+}
+
 static GtkWidget *
 menu_item_from_wnck_window(WnckWindow *wnck_window, gint icon_width,
         gint icon_height)
@@ -199,11 +234,7 @@ menu_item_from_wnck_window(WnckWindow *wnck_window, gint icon_width,
             img = gtk_image_new_from_pixbuf(icon);
     }
 
-    if(img) {
-        mi = gtk_image_menu_item_new_with_label(label->str);
-        gtk_image_menu_item_set_image(GTK_IMAGE_MENU_ITEM(mi), img);
-    } else
-        mi = gtk_menu_item_new_with_label(label->str);
+    mi = garcon_gtk_menu_create_menu_item(label->str, img);
 
     g_string_free(label, TRUE);
 
@@ -288,7 +319,11 @@ windowlist_populate(XfceDesktop *desktop,
             label = gtk_bin_get_child(GTK_BIN(mi));
             gtk_label_set_use_markup(GTK_LABEL(label), TRUE);
             /* center the workspace header */
+#if GTK_CHECK_VERSION (3, 0, 0)
+            gtk_label_set_xalign (GTK_LABEL(label), 0.44f);
+#else /* GTK_CHECK_VERSION */
             gtk_misc_set_alignment(GTK_MISC(label), 0.44f, 0);
+#endif /* GTK_CHECK_VERSION */
             /* If it's not the active workspace, make the color insensitive */
             if(wnck_workspace != active_workspace) {
                 GtkWidget *lbl = gtk_bin_get_child(GTK_BIN(mi));
@@ -362,9 +397,12 @@ windowlist_populate(XfceDesktop *desktop,
     if(wl_add_remove_options) {
         /* 'add workspace' item */
         if(wl_show_icons) {
+#if GTK_CHECK_VERSION (3, 0, 0)
+            img = gtk_image_new_from_icon_name("list-add", GTK_ICON_SIZE_MENU);
+#else /* GTK_CHECK_VERSION */
             img = gtk_image_new_from_stock(GTK_STOCK_ADD, GTK_ICON_SIZE_MENU);
-            mi = gtk_image_menu_item_new_with_mnemonic(_("_Add Workspace"));
-            gtk_image_menu_item_set_image(GTK_IMAGE_MENU_ITEM(mi), img);
+#endif /* GTK_CHECK_VERSION */
+            mi = garcon_gtk_menu_create_menu_item(_("Add Workspace"), img);
         } else
             mi = gtk_menu_item_new_with_mnemonic(_("_Add Workspace"));
         gtk_widget_show(mi);
@@ -374,16 +412,19 @@ windowlist_populate(XfceDesktop *desktop,
     
         /* 'remove workspace' item */
         if(!ws_name || atoi(ws_name) == nworkspaces)
-            rm_label = g_strdup_printf(_("_Remove Workspace %d"), nworkspaces);
+            rm_label = g_strdup_printf(_("Remove Workspace %d"), nworkspaces);
         else {
             gchar *ws_name_esc = g_markup_escape_text(ws_name, strlen(ws_name));
-            rm_label = g_strdup_printf(_("_Remove Workspace '%s'"), ws_name_esc);
+            rm_label = g_strdup_printf(_("Remove Workspace '%s'"), ws_name_esc);
             g_free(ws_name_esc);
         }
         if(wl_show_icons) {
+#if GTK_CHECK_VERSION (3, 0, 0)
+            img = gtk_image_new_from_icon_name("list-remove", GTK_ICON_SIZE_MENU);
+#else /* GTK_CHECK_VERSION */
             img = gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_MENU);
-            mi = gtk_image_menu_item_new_with_mnemonic(rm_label);
-            gtk_image_menu_item_set_image(GTK_IMAGE_MENU_ITEM(mi), img);
+#endif /* GTK_CHECK_VERSION */
+            mi = garcon_gtk_menu_create_menu_item(rm_label, img);
         } else
             mi = gtk_menu_item_new_with_mnemonic(rm_label);
         g_free(rm_label);
