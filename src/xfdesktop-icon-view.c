@@ -3565,9 +3565,13 @@ xfdesktop_get_workarea_single(XfdesktopIconView *icon_view,
         } else
             break;
     } while(bytes_after > 0);
-    
+
+#if GTK_CHECK_VERSION (3, 0, 0)
+    gdk_error_trap_pop_ignored();
+#else /* GTK_CHECK_VERSION */
     gdk_error_trap_pop();
-    
+#endif /* GTK_CHECK_VERSION */
+
     return ret;
 }
 

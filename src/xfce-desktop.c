@@ -298,7 +298,11 @@ set_imgfile_root_property(XfceDesktop *desktop, const gchar *filename,
                             gdk_atom_intern(property_name, FALSE));
     }
     
+#if GTK_CHECK_VERSION (3, 0, 0)
+    gdk_error_trap_pop_ignored();
+#else /* GTK_CHECK_VERSION */
     gdk_error_trap_pop();
+#endif /* GTK_CHECK_VERSION */
 }
 
 static void
@@ -323,7 +327,11 @@ set_real_root_window_pixmap(GdkScreen *gscreen,
     gdk_window_set_back_pixmap(groot, pmap, FALSE);
     /* there really should be a standard for this crap... */
 
+#if GTK_CHECK_VERSION (3, 0, 0)
+    gdk_error_trap_pop_ignored();
+#else /* GTK_CHECK_VERSION */
     gdk_error_trap_pop();
+#endif /* GTK_CHECK_VERSION */
 #endif
 }
 
@@ -1157,7 +1165,11 @@ xfce_desktop_unrealize(GtkWidget *widget)
     }
 
     gdk_flush();
+#if GTK_CHECK_VERSION (3, 0, 0)
+    gdk_error_trap_pop_ignored();
+#else /* GTK_CHECK_VERSION */
     gdk_error_trap_pop();
+#endif /* GTK_CHECK_VERSION */
 
     if(desktop->priv->bg_pixmap) {
         g_object_unref(G_OBJECT(desktop->priv->bg_pixmap));
