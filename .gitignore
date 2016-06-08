@@ -57,7 +57,11 @@ src/xfdesktop-marshal.c
 src/xfdesktop-marshal.h
 common/xfdesktop-marshal.c
 common/xfdesktop-marshal.h
+common/tumbler.c
+common/tumbler.h
 src/xfdesktop-file-manager-proxy.h
 src/xfdesktop-thunar-proxy.h
 src/xfdesktop-trash-proxy.h
 ChangeLog
+config.h.in~
+cov-int/
