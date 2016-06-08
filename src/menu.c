@@ -54,8 +54,7 @@ menu_populate(XfceDesktop *desktop,
               GtkMenuShell *menu,
               gpointer user_data)
 {
-    GtkWidget *mi, *img = NULL;
-    GtkIconTheme *itheme = gtk_icon_theme_get_default();
+    GtkWidget *mi;
     GtkWidget *desktop_menu = NULL;
 
     TRACE("ENTERING");
@@ -71,15 +70,8 @@ menu_populate(XfceDesktop *desktop,
     mi = gtk_separator_menu_item_new();
     gtk_widget_show(mi);
     gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
-    
-    if(gtk_icon_theme_has_icon(itheme, "applications-other")) {
-        img = gtk_image_new_from_icon_name("applications-other",
-                                           GTK_ICON_SIZE_MENU);
-        gtk_widget_show(img);
-    }
-    
-    mi = gtk_image_menu_item_new_with_mnemonic(_("_Applications"));
-    gtk_image_menu_item_set_image(GTK_IMAGE_MENU_ITEM(mi), img);
+
+    mi = gtk_menu_item_new_with_mnemonic(_("_Applications"));
     gtk_widget_show(mi);
 
     XF_DEBUG("show desktop menu icons %s", show_desktop_menu_icons ? "TRUE" : "FALSE");

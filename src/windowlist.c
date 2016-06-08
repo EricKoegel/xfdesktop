@@ -147,40 +147,6 @@ menulist_set_label_flags(GtkWidget *widget, gpointer data)
     }
 }
 
-/* Adapted from garcon_gtk_menu_create_menu_item because I don't want
- * to write it over and over.
- */
-static GtkWidget*
-garcon_gtk_menu_create_menu_item (const gchar *name,
-                                  GtkWidget   *image)
-{
-    GtkWidget *mi;
-    GtkWidget *box;
-    GtkWidget *label;
-
-    /* create item */
-    mi = gtk_menu_item_new ();
-    label = gtk_label_new (NULL);
-    gtk_label_set_markup (GTK_LABEL (label), name);
-    gtk_label_set_justify (GTK_LABEL (label), GTK_JUSTIFY_LEFT);
-#if GTK_CHECK_VERSION (3, 0, 0)
-    box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_widget_set_halign (label, GTK_ALIGN_START);
-#else /* GTK_CHECK_VERSION */
-    box = gtk_hbox_new (FALSE, 0);
-    gtk_misc_set_alignment (GTK_MISC (label), 0, 0.5f);
-#endif /* GTK_CHECK_VERSION */
-
-    gtk_widget_show (image);
-
-    /* Add the image and label to the box, add the box to the menu item */
-    gtk_box_pack_start (GTK_BOX (box), image, FALSE, FALSE, 0);
-    gtk_box_pack_start (GTK_BOX (box), label, TRUE, TRUE, 6);
-    gtk_widget_show_all (box);
-    gtk_container_add (GTK_CONTAINER (mi), box);
-
-    return mi;
-}
 
 static GtkWidget *
 menu_item_from_wnck_window(WnckWindow *wnck_window, gint icon_width,
@@ -234,7 +200,7 @@ menu_item_from_wnck_window(WnckWindow *wnck_window, gint icon_width,
             img = gtk_image_new_from_pixbuf(icon);
     }
 
-    mi = garcon_gtk_menu_create_menu_item(label->str, img);
+    mi = xfdesktop_menu_create_menu_item(label->str, img);
 
     g_string_free(label, TRUE);
 
@@ -402,7 +368,7 @@ windowlist_populate(XfceDesktop *desktop,
 #else /* GTK_CHECK_VERSION */
             img = gtk_image_new_from_stock(GTK_STOCK_ADD, GTK_ICON_SIZE_MENU);
 #endif /* GTK_CHECK_VERSION */
-            mi = garcon_gtk_menu_create_menu_item(_("Add Workspace"), img);
+            mi = xfdesktop_menu_create_menu_item(_("Add Workspace"), img);
         } else
             mi = gtk_menu_item_new_with_mnemonic(_("_Add Workspace"));
         gtk_widget_show(mi);
@@ -424,7 +390,7 @@ windowlist_populate(XfceDesktop *desktop,
 #else /* GTK_CHECK_VERSION */
             img = gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_MENU);
 #endif /* GTK_CHECK_VERSION */
-            mi = garcon_gtk_menu_create_menu_item(rm_label, img);
+            mi = xfdesktop_menu_create_menu_item(rm_label, img);
         } else
             mi = gtk_menu_item_new_with_mnemonic(rm_label);
         g_free(rm_label);
