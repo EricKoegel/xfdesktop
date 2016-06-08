@@ -106,8 +106,11 @@ guint32 xfdesktop_popup_keyboard_grab_available(GdkWindow *win);
 
 gchar* xfdesktop_remove_whitspaces(gchar* str);
 
-GtkWidget *xfdesktop_menu_create_menu_item (const gchar *name,
-                                            GtkWidget   *image);
+GtkWidget *xfdesktop_menu_create_menu_item_with_markup (const gchar *name,
+                                                        GtkWidget   *image);
+
+GtkWidget *xfdesktop_menu_create_menu_item_with_mnemonic (const gchar *name,
+                                                          GtkWidget   *image);
 
 
 

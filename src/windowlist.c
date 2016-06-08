@@ -200,7 +200,7 @@ menu_item_from_wnck_window(WnckWindow *wnck_window, gint icon_width,
             img = gtk_image_new_from_pixbuf(icon);
     }
 
-    mi = xfdesktop_menu_create_menu_item(label->str, img);
+    mi = xfdesktop_menu_create_menu_item_with_markup(label->str, img);
 
     g_string_free(label, TRUE);
 
@@ -363,12 +363,8 @@ windowlist_populate(XfceDesktop *desktop,
     if(wl_add_remove_options) {
         /* 'add workspace' item */
         if(wl_show_icons) {
-#if GTK_CHECK_VERSION (3, 0, 0)
             img = gtk_image_new_from_icon_name("list-add", GTK_ICON_SIZE_MENU);
-#else /* GTK_CHECK_VERSION */
-            img = gtk_image_new_from_stock(GTK_STOCK_ADD, GTK_ICON_SIZE_MENU);
-#endif /* GTK_CHECK_VERSION */
-            mi = xfdesktop_menu_create_menu_item(_("Add Workspace"), img);
+            mi = xfdesktop_menu_create_menu_item_with_mnemonic(_("_Add Workspace"), img);
         } else
             mi = gtk_menu_item_new_with_mnemonic(_("_Add Workspace"));
         gtk_widget_show(mi);
@@ -378,19 +374,15 @@ windowlist_populate(XfceDesktop *desktop,
     
         /* 'remove workspace' item */
         if(!ws_name || atoi(ws_name) == nworkspaces)
-            rm_label = g_strdup_printf(_("Remove Workspace %d"), nworkspaces);
+            rm_label = g_strdup_printf(_("_Remove Workspace %d"), nworkspaces);
         else {
             gchar *ws_name_esc = g_markup_escape_text(ws_name, strlen(ws_name));
-            rm_label = g_strdup_printf(_("Remove Workspace '%s'"), ws_name_esc);
+            rm_label = g_strdup_printf(_("_Remove Workspace '%s'"), ws_name_esc);
             g_free(ws_name_esc);
         }
         if(wl_show_icons) {
-#if GTK_CHECK_VERSION (3, 0, 0)
             img = gtk_image_new_from_icon_name("list-remove", GTK_ICON_SIZE_MENU);
-#else /* GTK_CHECK_VERSION */
-            img = gtk_image_new_from_stock(GTK_STOCK_REMOVE, GTK_ICON_SIZE_MENU);
-#endif /* GTK_CHECK_VERSION */
-            mi = xfdesktop_menu_create_menu_item(rm_label, img);
+            mi = xfdesktop_menu_create_menu_item_with_mnemonic(rm_label, img);
         } else
             mi = gtk_menu_item_new_with_mnemonic(rm_label);
         g_free(rm_label);
