@@ -125,10 +125,6 @@ struct _XfdesktopApplication
 {
     GApplication parent;
 
-#if !GLIB_CHECK_VERSION (2, 32, 0)
-    GSimpleActionGroup *actions;
-#endif
-
     GtkWidget **desktops;
     XfconfChannel *channel;
     gint nscreens;
@@ -166,11 +162,7 @@ xfdesktop_application_class_init(XfdesktopApplicationClass *klass)
 static void
 xfdesktop_application_add_action(XfdesktopApplication *app, GAction *action)
 {
-#if GLIB_CHECK_VERSION (2, 32, 0)
     g_action_map_add_action(G_ACTION_MAP(app), action);
-#else
-    g_simple_action_group_insert(app->actions, action);
-#endif
 }
 
 static void
@@ -179,10 +171,6 @@ xfdesktop_application_init(XfdesktopApplication *app)
     GSimpleAction *action;
 
     app->cancel = g_cancellable_new();
-
-#if !GLIB_CHECK_VERSION (2, 32, 0)
-    app->actions = g_simple_action_group_new();
-#endif
 
     /* reload action */
     action = g_simple_action_new("reload", NULL);
@@ -220,9 +208,6 @@ xfdesktop_application_init(XfdesktopApplication *app)
     xfdesktop_application_add_action(app, G_ACTION(action));
     g_object_unref(action);
 
-#if !GLIB_CHECK_VERSION (2, 32, 0)
-    g_application_set_action_group(G_APPLICATION(app), (GActionGroup*)app->actions);
-#endif
 }
 
 static void
@@ -281,11 +266,7 @@ session_die(gpointer user_data)
     for(main_level = gtk_main_level(); main_level > 0; --main_level)
         gtk_main_quit();
 
-#if GLIB_CHECK_VERSION(2, 32, 0)
     g_application_quit(G_APPLICATION(app));
-#else
-    xfdesktop_application_shutdown(G_APPLICATION(app));
-#endif
 }
 
 static void

@@ -1754,11 +1754,8 @@ xfce_desktop_do_menu_popup(XfceDesktop *desktop,
     if(activate_time == 0)
         activate_time = gtk_get_current_event_time();
 
-#if LIBXFCE4UI_CHECK_VERSION (4, 12, 2)
+
     xfce_gtk_menu_popup_until_mapped(GTK_MENU(menu), NULL, NULL, NULL, NULL, button, activate_time);
-#else /* LIBXFCE4UI_CHECK_VERSION */
-    gtk_menu_popup(GTK_MENU(menu), NULL, NULL, NULL, NULL, button, activate_time);
-#endif /* LIBXFCE4UI_CHECK_VERSION */
 }
 
 void
@@ -1767,13 +1764,6 @@ xfce_desktop_popup_root_menu(XfceDesktop *desktop,
                              guint activate_time)
 {
     TRACE("entering");
-
-#if !LIBXFCE4UI_CHECK_VERSION (4, 12, 2)
-    /* If it's launched by xfdesktop --menu we won't have an event time.
-     * Grab the keyboard focus */
-    if(activate_time == 0)
-        activate_time = xfdesktop_popup_keyboard_grab_available(gtk_widget_get_window(GTK_WIDGET(desktop)));
-#endif /* LIBXFCE4UI_CHECK_VERSION */
 
     xfce_desktop_do_menu_popup(desktop, button, activate_time,
                                signals[SIG_POPULATE_ROOT_MENU]);
@@ -1785,12 +1775,6 @@ xfce_desktop_popup_secondary_root_menu(XfceDesktop *desktop,
                                        guint button,
                                        guint activate_time)
 {
-#if !LIBXFCE4UI_CHECK_VERSION (4, 12, 2)
-    /* If it's launched by xfdesktop --menu we won't have an event time.
-     * Grab the keyboard focus */
-    if(activate_time == 0)
-        activate_time = xfdesktop_popup_keyboard_grab_available(gtk_widget_get_window(GTK_WIDGET(desktop)));
-#endif /* LIBXFCE4UI_CHECK_VERSION */
 
     xfce_desktop_do_menu_popup(desktop, button, activate_time,
                                signals[SIG_POPULATE_SECONDARY_ROOT_MENU]);
