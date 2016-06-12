@@ -43,6 +43,7 @@
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <gtk/gtk.h>
 #include <gdk/gdkx.h>
+#include <gtk/gtkx.h>
 
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -52,7 +53,6 @@
 #include <xfconf/xfconf.h>
 #include <libxfce4ui/libxfce4ui.h>
 #include <libwnck/libwnck.h>
-#include <exo/exo.h>
 
 #include "xfdesktop-common.h"
 #include "xfdesktop-thumbnailer.h"
@@ -1335,72 +1335,76 @@ xfdesktop_settings_background_tab_change_bindings(AppearancePanel *panel,
     g_free(buf);
 
     /* color 1 button */
-    buf = xfdesktop_settings_generate_per_workspace_binding_string(panel, "color1");
+    /* Fixme: we will need to migrate from color1 to rgba1 (GdkColor to GdkRGBA) */
+    buf = xfdesktop_settings_generate_per_workspace_binding_string(panel, "rgba1");
     if(remove_binding) {
         xfconf_g_property_unbind(panel->color1_btn_id);
     } else {
         /* If the first color doesn't exist, try to load the old one */
         if(!xfconf_channel_has_property(channel, buf)) {
             GValue value = { 0, };
-            old_property = xfdesktop_settings_generate_old_binding_string(panel, "color1");
+            old_property = xfdesktop_settings_generate_old_binding_string(panel, "rgba1");
 
             xfconf_channel_get_property(channel, old_property, &value);
 
             if(G_VALUE_HOLDS_BOXED(&value)) {
-                gtk_color_button_set_color(GTK_COLOR_BUTTON(panel->color1_btn),
+                gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(panel->color1_btn),
                                            g_value_get_boxed(&value));
                 g_value_unset(&value);
             } else {
                 /* revert to showing our default color */
-                GdkColor color1;
-                color1.red = 0x1515;
-                color1.green = 0x2222;
-                color1.blue = 0x3333;
-                gtk_color_button_set_color(GTK_COLOR_BUTTON(panel->color1_btn), &color1);
+                GdkRGBA color1;
+                color1.red = 0.5f;
+                color1.green = 0.5f;
+                color1.blue = 0.5f;
+                color1.alpha = 1.0f;
+                gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(panel->color1_btn), &color1);
             }
 
             g_free(old_property);
         }
 
         /* Now bind to the new value */
-        panel->color1_btn_id = xfconf_g_property_bind_gdkcolor(channel, buf,
-                                                               G_OBJECT(panel->color1_btn),
-                                                               "color");
+        panel->color1_btn_id = xfconf_g_property_bind_gdkrgba(channel, buf,
+                                                              G_OBJECT(panel->color1_btn),
+                                                              "rgba");
     }
     g_free(buf);
 
     /* color 2 button */
-    buf = xfdesktop_settings_generate_per_workspace_binding_string(panel, "color2");
+    /* Fixme: we will need to migrate from color1 to rgba1 (GdkColor to GdkRGBA) */
+    buf = xfdesktop_settings_generate_per_workspace_binding_string(panel, "rgba2");
     if(remove_binding) {
         xfconf_g_property_unbind(panel->color2_btn_id);
     } else {
         /* If the 2nd color doesn't exist, try to load the old one */
         if(!xfconf_channel_has_property(channel, buf)) {
             GValue value = { 0, };
-            old_property = xfdesktop_settings_generate_old_binding_string(panel, "color2");
+            old_property = xfdesktop_settings_generate_old_binding_string(panel, "rgba2");
 
             xfconf_channel_get_property(channel, old_property, &value);
 
             if(G_VALUE_HOLDS_BOXED(&value)) {
-                gtk_color_button_set_color(GTK_COLOR_BUTTON(panel->color2_btn),
+                gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(panel->color2_btn),
                                            g_value_get_boxed(&value));
                 g_value_unset(&value);
             } else {
                 /* revert to showing our default color */
-                GdkColor color2;
-                color2.red = 0x1515;
-                color2.green = 0x2222;
-                color2.blue = 0x3333;
-                gtk_color_button_set_color(GTK_COLOR_BUTTON(panel->color2_btn), &color2);
+                GdkRGBA color2;
+                color2.red = 0.5f;
+                color2.green = 0.5f;
+                color2.blue = 0.5f;
+                color2.alpha = 1.0f;
+                gtk_color_chooser_set_rgba(GTK_COLOR_CHOOSER(panel->color2_btn), &color2);
             }
 
             g_free(old_property);
         }
 
         /* Now bind to the new value */
-        panel->color2_btn_id = xfconf_g_property_bind_gdkcolor(channel, buf,
-                                                               G_OBJECT(panel->color2_btn),
-                                                               "color");
+        panel->color2_btn_id = xfconf_g_property_bind_gdkrgba(channel, buf,
+                                                              G_OBJECT(panel->color2_btn),
+                                                              "rgba");
     }
     g_free(buf);
 
@@ -1717,7 +1721,6 @@ xfdesktop_settings_dialog_setup_tabs(GtkBuilder *main_gxml,
     GdkScreen *screen;
     WnckScreen *wnck_screen;
     XfconfChannel *channel = panel->channel;
-    GdkColor color;
     const gchar *path;
     GFile *file;
     gchar *uri_path;
@@ -1830,12 +1833,8 @@ xfdesktop_settings_dialog_setup_tabs(GtkBuilder *main_gxml,
                                                        "infobar_header"));
 
     panel->infobar_label = gtk_label_new("This is some text");
-    gdk_color_parse ("black", &color);
-    gtk_widget_modify_fg (panel->infobar_label, GTK_STATE_NORMAL, &color);
-    gtk_widget_set_no_show_all(panel->infobar, TRUE);
     gtk_widget_show(panel->infobar_label);
     gtk_widget_show(panel->infobar);
-    gtk_widget_set_visible(panel->infobar, FALSE);
 
     /* Add the panel's infobar label to the infobar, with this setup
      * it's easy to update the text for the infobar. */
@@ -2045,7 +2044,7 @@ xfdesktop_settings_response(GtkWidget *dialog, gint response_id, gpointer user_d
     }
 }
 
-static GdkNativeWindow opt_socket_id = 0;
+static Window opt_socket_id = 0;
 static gboolean opt_version = FALSE;
 static gboolean opt_enable_debug = FALSE;
 static GOptionEntry option_entries[] = {
@@ -2099,13 +2098,14 @@ main(int argc, char **argv)
     }
 
     if(!xfconf_init(&error)) {
-        xfce_message_dialog(NULL, _("Desktop Settings"),
-                            GTK_STOCK_DIALOG_ERROR,
-                            _("Unable to contact settings server"),
-                            error->message,
-                            GTK_STOCK_QUIT, GTK_RESPONSE_ACCEPT,
-                            NULL);
-        g_error_free(error);
+        gtk_message_dialog_new (NULL,
+                                GTK_DIALOG_MODAL,
+                                GTK_MESSAGE_ERROR,
+                                GTK_BUTTONS_OK_CANCEL,
+                                _("Unable to contact settings server: %s"),
+                                error->message);
+
+        g_clear_error(&error);
         return 1;
     }
 
@@ -2116,7 +2116,7 @@ main(int argc, char **argv)
                                     &error))
     {
         g_printerr("Failed to parse UI description: %s\n", error->message);
-        g_error_free(error);
+        g_clear_error(&error);
         return 1;
     }
 
@@ -2154,7 +2154,7 @@ main(int argc, char **argv)
         gdk_notify_startup_complete();
 
         plug_child = GTK_WIDGET(gtk_builder_get_object(gxml, "alignment1"));
-        gtk_widget_reparent(plug_child, plug);
+        gtk_container_add(GTK_CONTAINER (plug), plug_child);
         gtk_widget_show(plug_child);
 
         screen = gdk_screen_get_number(gtk_widget_get_screen(plug));

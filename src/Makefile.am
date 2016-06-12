@@ -110,11 +110,11 @@ if BUILD_DESKTOP_MENU
 
 xfdesktop_CFLAGS += \
 	$(GARCON_CFLAGS) \
-	$(GARCON_GTK2_CFLAGS)
+	$(GARCON_GTK3_CFLAGS)
 
 xfdesktop_LDADD += \
 	$(GARCON_LIBS) \
-	$(GARCON_GTK2_LIBS)
+	$(GARCON_GTK3_LIBS)
 
 endif
 
@@ -127,10 +127,10 @@ if ENABLE_FILE_ICONS
 xfdesktop_SOURCES += $(desktop_file_icon_sources)
 
 xfdesktop_CFLAGS += \
-	$(THUNARX_CFLAGS) \
+	$(THUNARX_CFLAGS)
 
 xfdesktop_LDADD += \
-	$(THUNARX_LIBS) \
+	$(THUNARX_LIBS)
 
 endif
 endif
