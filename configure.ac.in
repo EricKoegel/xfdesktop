@@ -24,7 +24,7 @@ m4_define([thunar_minimum_version], [1.2.0])
 m4_define([wnck_minimum_version], [2.30])
 m4_define([intltool_minimum_version], [0.31])
 m4_define([xfconf_minimum_version], [4.10.0])
-m4_define([cairo_minimum_version], [1.6])
+m4_define([cairo_minimum_version], [1.10])
 
 dnl define a short version string for xfdesktop
 m4_append([xfdesktop_version_short], ["])
