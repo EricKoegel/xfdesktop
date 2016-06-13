@@ -257,9 +257,7 @@ windowlist_populate(XfceDesktop *desktop,
     }
     
     gtk_icon_size_lookup(GTK_ICON_SIZE_MENU, &w, &h);
-G_GNUC_BEGIN_IGNORE_DEPRECATIONS
     style = gtk_widget_get_style(GTK_WIDGET(menu));
-G_GNUC_END_IGNORE_DEPRECATIONS
 
     wnck_screen = wnck_screen_get(gdk_screen_get_number(gscreen));
     wnck_screen_force_update (wnck_screen);
@@ -292,10 +290,9 @@ G_GNUC_END_IGNORE_DEPRECATIONS
             /* If it's not the active workspace, make the color insensitive */
             if(wnck_workspace != active_workspace) {
                 GtkWidget *lbl = gtk_bin_get_child(GTK_BIN(mi));
-G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+
                 gtk_widget_modify_fg(lbl, GTK_STATE_NORMAL,
                                      &(style->fg[GTK_STATE_INSENSITIVE]));
-G_GNUC_END_IGNORE_DEPRECATIONS
             }
             gtk_widget_show(mi);
             gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
@@ -340,10 +337,9 @@ G_GNUC_END_IGNORE_DEPRECATIONS
                    || wnck_workspace != active_workspace))
             {
                 GtkWidget *lbl = gtk_bin_get_child(GTK_BIN(mi));
-G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+
                 gtk_widget_modify_fg(lbl, GTK_STATE_NORMAL,
                                      &(style->fg[GTK_STATE_INSENSITIVE]));
-G_GNUC_END_IGNORE_DEPRECATIONS
             }
 
             gtk_widget_show(mi);
