@@ -257,8 +257,10 @@ windowlist_populate(XfceDesktop *desktop,
     }
     
     gtk_icon_size_lookup(GTK_ICON_SIZE_MENU, &w, &h);
+G_GNUC_BEGIN_IGNORE_DEPRECATIONS
     style = gtk_widget_get_style(GTK_WIDGET(menu));
-    
+G_GNUC_END_IGNORE_DEPRECATIONS
+
     wnck_screen = wnck_screen_get(gdk_screen_get_number(gscreen));
     wnck_screen_force_update (wnck_screen);
     nworkspaces = wnck_screen_get_workspace_count(wnck_screen);
@@ -285,16 +287,15 @@ windowlist_populate(XfceDesktop *desktop,
             label = gtk_bin_get_child(GTK_BIN(mi));
             gtk_label_set_use_markup(GTK_LABEL(label), TRUE);
             /* center the workspace header */
-#if GTK_CHECK_VERSION (3, 0, 0)
             gtk_label_set_xalign (GTK_LABEL(label), 0.44f);
-#else /* GTK_CHECK_VERSION */
-            gtk_misc_set_alignment(GTK_MISC(label), 0.44f, 0);
-#endif /* GTK_CHECK_VERSION */
+
             /* If it's not the active workspace, make the color insensitive */
             if(wnck_workspace != active_workspace) {
                 GtkWidget *lbl = gtk_bin_get_child(GTK_BIN(mi));
+G_GNUC_BEGIN_IGNORE_DEPRECATIONS
                 gtk_widget_modify_fg(lbl, GTK_STATE_NORMAL,
                                      &(style->fg[GTK_STATE_INSENSITIVE]));
+G_GNUC_END_IGNORE_DEPRECATIONS
             }
             gtk_widget_show(mi);
             gtk_menu_shell_append(GTK_MENU_SHELL(menu), mi);
@@ -339,8 +340,10 @@ windowlist_populate(XfceDesktop *desktop,
                    || wnck_workspace != active_workspace))
             {
                 GtkWidget *lbl = gtk_bin_get_child(GTK_BIN(mi));
+G_GNUC_BEGIN_IGNORE_DEPRECATIONS
                 gtk_widget_modify_fg(lbl, GTK_STATE_NORMAL,
                                      &(style->fg[GTK_STATE_INSENSITIVE]));
+G_GNUC_END_IGNORE_DEPRECATIONS
             }
 
             gtk_widget_show(mi);

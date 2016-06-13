@@ -40,8 +40,10 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 
+#include <gdk/gdk.h>
 #include <gdk/gdkx.h>
 #include <gtk/gtk.h>
+#include <gtk/gtkx.h>
 
 #include <xfconf/xfconf.h>
 #include <libxfce4ui/libxfce4ui.h>
@@ -308,7 +310,7 @@ event_forward_to_rootwin(GdkScreen *gscreen, GdkEvent *event)
         xev2.button = xev.button;
     } else
         return;
-    xev.window = GDK_WINDOW_XWINDOW(gdk_screen_get_root_window(gscreen));
+    xev.window = GDK_WINDOW_XID(gdk_screen_get_root_window(gscreen));
     xev.root =  xev.window;
     xev.subwindow = None;
     xev.time = event->button.time;
@@ -699,7 +701,7 @@ xfdesktop_application_start(XfdesktopApplication *app)
         app->channel = xfconf_channel_get(XFDESKTOP_CHANNEL);
 
     /* create an XfceDesktop for every screen */
-    app->nscreens = gdk_display_get_n_screens(gdpy);
+    app->nscreens = XScreenCount (gdk_x11_display_get_xdisplay (gdpy));
     app->desktops = g_new0(GtkWidget *, app->nscreens);
 
     for(i = 0; i < app->nscreens; i++) {

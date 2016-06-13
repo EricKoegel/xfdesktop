@@ -95,9 +95,7 @@ struct _XfceDesktopPriv
 
     XfconfChannel *channel;
     gchar *property_prefix;
-    
-    GdkPixmap *bg_pixmap;
-    
+
     gint nworkspaces;
     XfceWorkspace **workspaces;
     gint current_workspace;
@@ -161,8 +159,8 @@ static gboolean xfce_desktop_button_release_event(GtkWidget *widget,
                                                   GdkEventButton *evt);
 static gboolean xfce_desktop_popup_menu(GtkWidget *widget);
 
-static gboolean xfce_desktop_expose(GtkWidget *w,
-                                    GdkEventExpose *evt);
+static gboolean xfce_desktop_draw(GtkWidget *w,
+                                  cairo_t   *cr);
 static gboolean xfce_desktop_delete_event(GtkWidget *w,
                                           GdkEventAny *evt);
 static void xfce_desktop_style_set(GtkWidget *w,
@@ -297,90 +295,17 @@ set_imgfile_root_property(XfceDesktop *desktop, const gchar *filename,
         gdk_property_delete(gdk_screen_get_root_window(desktop->priv->gscreen),
                             gdk_atom_intern(property_name, FALSE));
     }
-    
-#if GTK_CHECK_VERSION (3, 0, 0)
+
     gdk_error_trap_pop_ignored();
-#else /* GTK_CHECK_VERSION */
-    gdk_error_trap_pop();
-#endif /* GTK_CHECK_VERSION */
-}
-
-static void
-set_real_root_window_pixmap(GdkScreen *gscreen,
-                            GdkPixmap *pmap)
-{
-#ifndef DISABLE_FOR_BUG7442
-    Window xid;
-    GdkWindow *groot;
-    
-    xid = GDK_DRAWABLE_XID(pmap);
-    groot = gdk_screen_get_root_window(gscreen);
-    
-    gdk_error_trap_push();
-    
-    /* set root property for transparent Eterms */
-    gdk_property_change(groot,
-            gdk_atom_intern("_XROOTPMAP_ID", FALSE),
-            gdk_atom_intern("PIXMAP", FALSE), 32,
-            GDK_PROP_MODE_REPLACE, (guchar *)&xid, 1);
-    /* and set the root window's BG pixmap, because aterm is somewhat lame. */
-    gdk_window_set_back_pixmap(groot, pmap, FALSE);
-    /* there really should be a standard for this crap... */
-
-#if GTK_CHECK_VERSION (3, 0, 0)
-    gdk_error_trap_pop_ignored();
-#else /* GTK_CHECK_VERSION */
-    gdk_error_trap_pop();
-#endif /* GTK_CHECK_VERSION */
-#endif
-}
-
-static GdkPixmap *
-create_bg_pixmap(GdkScreen *gscreen, gpointer user_data)
-{
-    XfceDesktop *desktop = user_data;
-    gint w, h;
-
-    TRACE("entering");
-
-    g_return_val_if_fail(XFCE_IS_DESKTOP(desktop), NULL);
-
-    /* If the workspaces haven't been created yet there's no need to do the
-     * background pixmap */
-    if(desktop->priv->workspaces == NULL) {
-        XF_DEBUG("exiting, desktop->priv->workspaces == NULL");
-        return NULL;
-    }
-
-    TRACE("really entering");
-
-    w = gdk_screen_get_width(gscreen);
-    h = gdk_screen_get_height(gscreen);
-    gtk_widget_set_size_request(GTK_WIDGET(desktop), w, h);
-    gtk_window_resize(GTK_WINDOW(desktop), w, h);
-
-    if(desktop->priv->bg_pixmap)
-        g_object_unref(G_OBJECT(desktop->priv->bg_pixmap));
-    desktop->priv->bg_pixmap = gdk_pixmap_new(GDK_DRAWABLE(gtk_widget_get_window(GTK_WIDGET(desktop))),
-                                              w, h, -1);
-
-    if(!GDK_IS_PIXMAP(desktop->priv->bg_pixmap))
-        return NULL;
-
-    gdk_window_set_back_pixmap(gtk_widget_get_window(GTK_WIDGET(desktop)),
-                               desktop->priv->bg_pixmap, FALSE);
-
-    return desktop->priv->bg_pixmap;
 }
 
 static void
 backdrop_changed_cb(XfceBackdrop *backdrop, gpointer user_data)
 {
     XfceDesktop *desktop = XFCE_DESKTOP(user_data);
-    GdkPixmap *pmap = desktop->priv->bg_pixmap;
     GdkScreen *gscreen = desktop->priv->gscreen;
-    GdkRectangle rect;
-    GdkRegion *clip_region = NULL;
+    cairo_rectangle_int_t rect;
+    cairo_region_t *clip_region = NULL;
     gint i, monitor = -1, current_workspace;
 #ifdef G_ENABLE_DEBUG
     gchar *monitor_name = NULL;
@@ -421,7 +346,7 @@ backdrop_changed_cb(XfceBackdrop *backdrop, gpointer user_data)
     if(xfce_desktop_get_n_monitors(desktop) > 1
        && xfce_workspace_get_xinerama_stretch(desktop->priv->workspaces[current_workspace])) {
         /* Spanning screens */
-        GdkRectangle monitor_rect;
+        cairo_rectangle_int_t monitor_rect;
 
         gdk_screen_get_monitor_geometry(gscreen, 0, &rect);
         /* Get the lowest x and y value for all the monitors in
@@ -450,7 +375,7 @@ backdrop_changed_cb(XfceBackdrop *backdrop, gpointer user_data)
 
     if(monitor > 0
        && !xfce_workspace_get_xinerama_stretch(desktop->priv->workspaces[current_workspace])) {
-        clip_region = gdk_region_rectangle(&rect);
+        clip_region = cairo_region_create_rectangle(&rect);
 
         XF_DEBUG("clip_region: x: %d, y: %d, w: %d, h: %d",
                  rect.x, rect.y, rect.width, rect.height);
@@ -460,31 +385,31 @@ backdrop_changed_cb(XfceBackdrop *backdrop, gpointer user_data)
          * should prevent the overlap and double backdrop drawing bugs.
          */
         for(i = 0; i < monitor; i++) {
-            GdkRectangle previous_monitor;
-            GdkRegion *previous_region;
+            cairo_rectangle_int_t previous_monitor;
+            cairo_region_t *previous_region;
             gdk_screen_get_monitor_geometry(gscreen, i, &previous_monitor);
 
             XF_DEBUG("previous_monitor: x: %d, y: %d, w: %d, h: %d",
                      previous_monitor.x, previous_monitor.y,
                      previous_monitor.width, previous_monitor.height);
 
-            previous_region = gdk_region_rectangle(&previous_monitor);
+            previous_region = cairo_region_create_rectangle(&previous_monitor);
 
-            gdk_region_subtract(clip_region, previous_region);
+            cairo_region_subtract(clip_region, previous_region);
 
-            gdk_region_destroy(previous_region);
+            cairo_region_destroy(previous_region);
         }
     }
 
     if(clip_region != NULL) {
         /* Update the area to redraw to limit the icons/area painted */
-        gdk_region_get_clipbox(clip_region, &rect);
+        cairo_region_get_extents(clip_region, &rect);
         XF_DEBUG("area to update: x: %d, y: %d, w: %d, h: %d",
                  rect.x, rect.y, rect.width, rect.height);
     }
 
     if(rect.width != 0 && rect.height != 0) {
-        /* get the composited backdrop pixmap */
+        /* get the composited backdrop pixbuf */
         GdkPixbuf *pix = xfce_backdrop_get_pixbuf(backdrop);
         cairo_t *cr;
 
@@ -493,26 +418,12 @@ backdrop_changed_cb(XfceBackdrop *backdrop, gpointer user_data)
             xfce_backdrop_generate_async(backdrop);
 
             if(clip_region != NULL)
-                gdk_region_destroy(clip_region);
+                cairo_region_destroy(clip_region);
 
             return;
         }
 
-        /* Create the background pixmap if it isn't already */
-        if(!GDK_IS_PIXMAP(pmap)) {
-            pmap = create_bg_pixmap(gscreen, desktop);
-
-            if(!GDK_IS_PIXMAP(pmap)) {
-                g_object_unref(pix);
-
-                if(clip_region != NULL)
-                    gdk_region_destroy(clip_region);
-
-                return;
-            }
-        }
-
-        cr = gdk_cairo_create(GDK_DRAWABLE(pmap));
+        cr = gdk_cairo_create(gtk_widget_get_window(GTK_WIDGET(desktop)));
         gdk_cairo_set_source_pixbuf(cr, pix, rect.x, rect.y);
 
         /* clip the area so we don't draw over a previous wallpaper */
@@ -523,16 +434,9 @@ backdrop_changed_cb(XfceBackdrop *backdrop, gpointer user_data)
 
         cairo_paint(cr);
 
-        /* tell gtk to redraw the repainted area */
-        gtk_widget_queue_draw_area(GTK_WIDGET(desktop), rect.x, rect.y,
-                                   rect.width, rect.height);
-
         set_imgfile_root_property(desktop,
                                   xfce_backdrop_get_image_filename(backdrop),
                                   monitor);
-
-        /* do this again so apps watching the root win notice the update */
-        set_real_root_window_pixmap(gscreen, pmap);
 
         g_object_unref(G_OBJECT(pix));
         cairo_destroy(cr);
@@ -540,7 +444,7 @@ backdrop_changed_cb(XfceBackdrop *backdrop, gpointer user_data)
     }
 
     if(clip_region != NULL)
-        gdk_region_destroy(clip_region);
+        cairo_region_destroy(clip_region);
 }
 
 static void
@@ -558,12 +462,6 @@ screen_size_changed_cb(GdkScreen *gscreen, gpointer user_data)
 
     if(current_workspace < 0)
         return;
-
-    /* release the bg_pixmap since the dimensions may have changed */
-    if(desktop->priv->bg_pixmap) {
-        g_object_unref(desktop->priv->bg_pixmap);
-        desktop->priv->bg_pixmap = NULL;
-    }
 
     /* special case for 1 backdrop to handle xinerama stretching */
     if(xfce_workspace_get_xinerama_stretch(desktop->priv->workspaces[current_workspace])) {
@@ -809,7 +707,7 @@ xfce_desktop_class_init(XfceDesktopClass *klass)
     widget_class->unrealize = xfce_desktop_unrealize;
     widget_class->button_press_event = xfce_desktop_button_press_event;
     widget_class->button_release_event = xfce_desktop_button_release_event;
-    widget_class->expose_event = xfce_desktop_expose;
+    widget_class->draw = xfce_desktop_draw;
     widget_class->delete_event = xfce_desktop_delete_event;
     widget_class->popup_menu = xfce_desktop_popup_menu;
     widget_class->style_set = xfce_desktop_style_set;
@@ -1148,12 +1046,6 @@ xfce_desktop_unrealize(GtkWidget *widget)
     gdk_property_delete(groot, gdk_atom_intern("XFCE_DESKTOP_WINDOW", FALSE));
     gdk_property_delete(groot, gdk_atom_intern("NAUTILUS_DESKTOP_WINDOW_ID", FALSE));
 
-#ifndef DISABLE_FOR_BUG7442
-    gdk_property_delete(groot, gdk_atom_intern("_XROOTPMAP_ID", FALSE));
-    gdk_property_delete(groot, gdk_atom_intern("ESETROOT_PMAP_ID", FALSE));
-    gdk_window_set_back_pixmap(groot, NULL, FALSE);
-#endif
-
     if(desktop->priv->workspaces) {
         for(i = 0; i < desktop->priv->nworkspaces; i++) {
             g_snprintf(property_name, 128, XFDESKTOP_IMAGE_FILE_FMT, i);
@@ -1165,16 +1057,8 @@ xfce_desktop_unrealize(GtkWidget *widget)
     }
 
     gdk_flush();
-#if GTK_CHECK_VERSION (3, 0, 0)
-    gdk_error_trap_pop_ignored();
-#else /* GTK_CHECK_VERSION */
-    gdk_error_trap_pop();
-#endif /* GTK_CHECK_VERSION */
 
-    if(desktop->priv->bg_pixmap) {
-        g_object_unref(G_OBJECT(desktop->priv->bg_pixmap));
-        desktop->priv->bg_pixmap = NULL;
-    }
+    gdk_error_trap_pop_ignored();
     
     gtk_window_set_icon(GTK_WINDOW(widget), NULL);
 
@@ -1264,27 +1148,24 @@ xfce_desktop_popup_menu(GtkWidget *w)
 }
 
 static gboolean
-xfce_desktop_expose(GtkWidget *w,
-                    GdkEventExpose *evt)
+xfce_desktop_draw(GtkWidget *w,
+                  cairo_t   *cr)
 {
     GList *children, *l;
     
-    /*TRACE("entering");*/
-    
-    if(evt->count != 0)
-        return FALSE;
-    
-    gdk_window_clear_area(gtk_widget_get_window(w), evt->area.x, evt->area.y,
-                          evt->area.width, evt->area.height);
-    
+    TRACE("entering");
+
+    /* chain up */
+    GTK_WIDGET_CLASS(xfce_desktop_parent_class)->draw(w, cr);
+
     children = gtk_container_get_children(GTK_CONTAINER(w));
     for(l = children; l; l = l->next) {
-        gtk_container_propagate_expose(GTK_CONTAINER(w),
-                                       GTK_WIDGET(l->data),
-                                       evt);
+        gtk_container_propagate_draw(GTK_CONTAINER(w),
+                                     GTK_WIDGET(l->data),
+                                     cr);
     }
     g_list_free(children);
-    
+
     return FALSE;
 }
 
@@ -1316,9 +1197,6 @@ style_refresh_cb(gpointer *w)
 
     if(desktop->priv->workspaces == NULL)
         return FALSE;
-
-    if(GDK_IS_WINDOW(desktop->priv->bg_pixmap))
-        gdk_window_set_back_pixmap(gtk_widget_get_window(GTK_WIDGET(desktop)), desktop->priv->bg_pixmap, FALSE);
 
     gtk_widget_queue_draw(GTK_WIDGET(desktop));
 
