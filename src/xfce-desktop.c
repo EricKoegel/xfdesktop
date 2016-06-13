@@ -1153,7 +1153,7 @@ xfce_desktop_draw(GtkWidget *w,
 {
     GList *children, *l;
     
-    TRACE("entering");
+    XF_DEBUG("entering");
 
     /* chain up */
     GTK_WIDGET_CLASS(xfce_desktop_parent_class)->draw(w, cr);
@@ -1165,6 +1165,9 @@ xfce_desktop_draw(GtkWidget *w,
                                      cr);
     }
     g_list_free(children);
+
+    /* fake a screen size change so the background is drawn */
+    screen_size_changed_cb(XFCE_DESKTOP(w)->priv->gscreen, w);
 
     return FALSE;
 }
