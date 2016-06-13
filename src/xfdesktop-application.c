@@ -447,13 +447,9 @@ cb_xfdesktop_application_quit(GAction  *action,
 static gint
 xfdesktop_application_get_current_screen_number(XfdesktopApplication *app)
 {
-    GdkDisplay *display = gdk_display_get_default();
-    GdkScreen *screen;
     gint screen_num;
 
-    gdk_display_get_pointer(display, &screen, NULL, NULL, NULL);
-
-    screen_num = gdk_screen_get_number(screen);
+    screen_num = gdk_screen_get_number(xfce_gdk_screen_get_active(NULL));
 
     if(screen_num >= app->nscreens) {
         return -1;
