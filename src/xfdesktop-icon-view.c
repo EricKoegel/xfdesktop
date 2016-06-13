@@ -1183,13 +1183,21 @@ xfdesktop_icon_view_maybe_begin_drag(XfdesktopIconView *icon_view,
                                  icon_view->priv->foreign_source_actions : 0);
     
     if(!(evt->state & GDK_BUTTON3_MASK)) {
-        gtk_drag_begin(GTK_WIDGET(icon_view),
-                       icon_view->priv->source_targets,
-                       actions, 1, (GdkEvent *)evt);
+        gtk_drag_begin_with_coordinates(GTK_WIDGET(icon_view),
+                                        icon_view->priv->source_targets,
+                                        actions,
+                                        1,
+                                        (GdkEvent *)evt,
+                                        -1,
+                                        -1);
     } else {
-        gtk_drag_begin(GTK_WIDGET(icon_view),
-                       icon_view->priv->source_targets,
-                       actions | GDK_ACTION_ASK, 3, (GdkEvent *)evt);
+        gtk_drag_begin_with_coordinates(GTK_WIDGET(icon_view),
+                                        icon_view->priv->source_targets,
+                                        actions | GDK_ACTION_ASK,
+                                        3,
+                                        (GdkEvent *)evt,
+                                        -1,
+                                        -1);
     }
     
     DBG("DRAG BEGIN!");
@@ -1363,7 +1371,7 @@ xfdesktop_icon_view_motion_notify(GtkWidget *widget,
         
         if(icon_view->priv->item_under_pointer) {
             if(G_UNLIKELY(icon_view->priv->single_click)) {
-                GdkCursor *cursor = gdk_cursor_new(GDK_HAND2);
+                GdkCursor *cursor = gdk_cursor_new_for_display(gtk_widget_get_display(widget), GDK_HAND2);
                 gdk_window_set_cursor(evt->window, cursor);
                 g_object_unref(cursor);
             }

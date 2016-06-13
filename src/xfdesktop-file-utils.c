@@ -552,7 +552,7 @@ xfdesktop_file_utils_set_window_cursor(GtkWindow *window,
     if(!window || !gtk_widget_get_window(GTK_WIDGET(window)))
         return;
 
-    cursor = gdk_cursor_new(cursor_type);
+    cursor = gdk_cursor_new_for_display(gtk_widget_get_display(GTK_WIDGET(window)), cursor_type);
     if(G_LIKELY(cursor)) {
         gdk_window_set_cursor(gtk_widget_get_window(GTK_WIDGET(window)), cursor);
         g_object_unref(cursor);
