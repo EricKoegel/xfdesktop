@@ -394,7 +394,7 @@ xfdesktop_file_utils_get_icon(GIcon *icon,
                                                               ITHEME_FLAGS);
       if(icon_info) {
           pix_theme = gtk_icon_info_load_icon(icon_info, NULL);
-          gtk_icon_info_free(icon_info);
+          g_object_unref(icon_info);
       }
     } else if(G_IS_LOADABLE_ICON(base_icon)) {
         GInputStream *stream = g_loadable_icon_load(G_LOADABLE_ICON(base_icon),
@@ -483,7 +483,7 @@ xfdesktop_file_utils_add_emblems(GdkPixbuf *pix, GList *emblems)
                                                                 ITHEME_FLAGS);
         if(icon_info) {
             emblem_pix = gtk_icon_info_load_icon(icon_info, NULL);
-            gtk_icon_info_free(icon_info);
+            g_object_unref(icon_info);
         }
 
         if(emblem_pix) {
@@ -555,7 +555,7 @@ xfdesktop_file_utils_set_window_cursor(GtkWindow *window,
     cursor = gdk_cursor_new(cursor_type);
     if(G_LIKELY(cursor)) {
         gdk_window_set_cursor(gtk_widget_get_window(GTK_WIDGET(window)), cursor);
-        gdk_cursor_unref(cursor);
+        g_object_unref(cursor);
     }
 }
 
@@ -659,7 +659,8 @@ xfdesktop_file_utils_open_folder(GFile *file,
         screen = gtk_widget_get_screen(GTK_WIDGET(parent));
 
     uri = g_file_get_uri(file);
-
+#if 0
+/* where did this go? */
     if(!exo_execute_preferred_application_on_screen("FileManager",
                                                     uri,
                                                     NULL,
@@ -676,6 +677,7 @@ xfdesktop_file_utils_open_folder(GFile *file,
 
         g_error_free(error);
     }
+#endif
 
     g_free(uri);
 }

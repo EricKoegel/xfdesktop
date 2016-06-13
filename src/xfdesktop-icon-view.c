@@ -48,7 +48,6 @@
 #include "xfce-desktop.h"
 #include "xfdesktop-volume-icon.h"
 #include "xfdesktop-common.h"
-#include "gtkcairoblurprivate.h"
 
 #include <libwnck/libwnck.h>
 #include <libxfce4ui/libxfce4ui.h>
@@ -240,8 +239,8 @@ static void xfdesktop_icon_view_style_set(GtkWidget *widget,
                                           GtkStyle *previous_style);
 static void xfdesktop_icon_view_realize(GtkWidget *widget);
 static void xfdesktop_icon_view_unrealize(GtkWidget *widget);
-static gboolean xfdesktop_icon_view_expose(GtkWidget *widget,
-                                           GdkEventExpose *evt);
+static gboolean xfdesktop_icon_view_draw(GtkWidget *widget,
+                                         cairo_t   *cr);
 static void xfdesktop_icon_view_drag_begin(GtkWidget *widget,
                                            GdkDragContext *contest);
 static gboolean xfdesktop_icon_view_drag_motion(GtkWidget *widget,
@@ -419,7 +418,7 @@ xfdesktop_icon_view_class_init(XfdesktopIconViewClass *klass)
     widget_class->style_set = xfdesktop_icon_view_style_set;
     widget_class->realize = xfdesktop_icon_view_realize;
     widget_class->unrealize = xfdesktop_icon_view_unrealize;
-    widget_class->expose_event = xfdesktop_icon_view_expose;
+    widget_class->draw = xfdesktop_icon_view_draw;
     widget_class->drag_begin = xfdesktop_icon_view_drag_begin;
     widget_class->drag_motion = xfdesktop_icon_view_drag_motion;
     widget_class->drag_drop = xfdesktop_icon_view_drag_drop;
@@ -689,7 +688,7 @@ xfdesktop_icon_view_class_init(XfdesktopIconViewClass *klass)
 
     xfdesktop_icon_view_add_move_binding(binding_set, GDK_KEY_Home, 0,
                                          GTK_MOVEMENT_BUFFER_ENDS, -1);
-    xfdesktop_icon_view_add_move_binding(binding_set, GDK_KP_Home, 0,
+    xfdesktop_icon_view_add_move_binding(binding_set, GDK_KEY_KP_Home, 0,
                                          GTK_MOVEMENT_BUFFER_ENDS, -1);
 
     xfdesktop_icon_view_add_move_binding(binding_set, GDK_KEY_End, 0,
@@ -1119,7 +1118,7 @@ xfdesktop_icon_view_key_press(GtkWidget *widget,
 
     /* since we're NO_WINDOW, events don't get delivered to us normally,
      * so we have to activate the bindings manually */
-    return gtk_bindings_activate_event(GTK_OBJECT(icon_view), evt);
+    return gtk_bindings_activate_event(G_OBJECT(icon_view), evt);
 }
 
 static gboolean
@@ -1366,7 +1365,7 @@ xfdesktop_icon_view_motion_notify(GtkWidget *widget,
             if(G_UNLIKELY(icon_view->priv->single_click)) {
                 GdkCursor *cursor = gdk_cursor_new(GDK_HAND2);
                 gdk_window_set_cursor(evt->window, cursor);
-                gdk_cursor_unref(cursor);
+                g_object_unref(cursor);
             }
             if(!xfdesktop_icon_get_extents(icon_view->priv->item_under_pointer,
                                            NULL, NULL, &extents)
@@ -1917,9 +1916,7 @@ xfdesktop_icon_view_style_set(GtkWidget *widget,
                          "shadow-color",  &icon_view->priv->shadow_color,
                          NULL);
 
-    icon_view->priv->shadow_extents =
-      (icon_view->priv->shadow_blur_radius > 1) ?
-      _gtk_cairo_blur_compute_pixels(icon_view->priv->shadow_blur_radius) : 0;
+    icon_view->priv->shadow_extents = 0;
 
     /* default the shadow color to the inverse of the text color */
     if (!icon_view->priv->shadow_color) {
@@ -2168,36 +2165,25 @@ xfdesktop_icon_view_unrealize(GtkWidget *widget)
 }
 
 static gboolean
-xfdesktop_icon_view_expose(GtkWidget *widget,
-                           GdkEventExpose *evt)
+xfdesktop_icon_view_draw(GtkWidget *widget,
+                         cairo_t   *cr)
 {
     XfdesktopIconView *icon_view = XFDESKTOP_ICON_VIEW(widget);
-#if !GTK_CHECK_VERSION (3, 0, 0)
-    cairo_rectangle_int_t *rects = NULL;
-#endif
     cairo_rectangle_int_t clipbox;
     gint n_rects = 0, i;
 
-    /*TRACE("entering");*/
-    
-    if(evt->count != 0)
-        return FALSE;
+    TRACE("entering");
 
-#if GTK_CHECK_VERSION (3, 0, 0)
-    n_rects = cairo_region_num_rectangles(evt->region);
-    cairo_region_get_extents(evt->region, &clipbox);
-#else /* GTK_CHECK_VERSION */
-    gdk_region_get_rectangles(evt->region, &rects, &n_rects);
-    gdk_region_get_clipbox(evt->region, &clipbox);
-#endif /* GTK_CHECK_VERSION */
+    n_rects = 0; // TODO: FIXME cairo_region_num_rectangles(evt->region);
+    //cairo_region_get_extents(evt->region, &clipbox);
 
     xfdesktop_icon_view_repaint_icons(icon_view, &clipbox);
 
     if(icon_view->priv->definitely_rubber_banding) {
+#if 0
         cairo_rectangle_int_t intersect;
-        cairo_t *cr;
+#endif
 
-        cr = gdk_cairo_create(GDK_DRAWABLE(gtk_widget_get_window(widget)));
         cairo_set_line_width(cr, 1);
         cairo_set_operator(cr, CAIRO_OPERATOR_OVER);
         cairo_set_source_rgba(cr,
@@ -2206,26 +2192,18 @@ xfdesktop_icon_view_expose(GtkWidget *widget,
                               icon_view->priv->selection_box_color->blue / 65535.,
                               icon_view->priv->selection_box_alpha / 255.);
 
+#if 0
         /* paint each rectangle in the expose region with the rubber
          * band color, semi-transparently */
         for(i = 0; i < n_rects; ++i) {
-#if GTK_CHECK_VERSION (3, 0, 0)
             cairo_rectangle_int_t rect;
             cairo_region_get_rectangle(evt->region, i, &rect);
-            if(!gdk_rectangle_intersect(rect,
+            if(!gdk_rectangle_intersect(GDK_RECTANGLE(rect),
                                         &icon_view->priv->band_rect,
                                         &intersect))
             {
                 continue;
             }
-#else /* GTK_CHECK_VERSION */
-            if(!gdk_rectangle_intersect(&rects[i],
-                                        &icon_view->priv->band_rect,
-                                        &intersect))
-            {
-                continue;
-            }
-#endif /* GTK_CHECK_VERSION */
 
             cairo_save(cr);
 
@@ -2246,13 +2224,8 @@ xfdesktop_icon_view_expose(GtkWidget *widget,
 
             cairo_restore(cr);
         }
-
-        cairo_destroy(cr);
-    }
-
-#if !GTK_CHECK_VERSION (3, 0, 0)
-    g_free(rects);
 #endif
+    }
 
     return FALSE;
 }
@@ -3110,19 +3083,8 @@ xfdesktop_icon_view_draw_text(cairo_t *cr, PangoLayout *playout, cairo_rectangle
                   text_area->x + x_offset,
                   text_area->y + y_offset);
 
-    if (blur_radius > 1) {
-        cr = gtk_css_shadow_value_start_drawing (cr, blur_radius);
-        pango_cairo_show_layout (cr, playout);
-        cairo_set_line_width(cr, 1);
-        cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL);
-        pango_cairo_layout_path(cr, playout);
-        cairo_stroke(cr);
-        cr = gtk_css_shadow_value_finish_drawing (cr, blur_radius, color);
-    }
-    else {
-        gdk_cairo_set_source_color(cr, color);
-        pango_cairo_show_layout(cr, playout);
-    }
+    gdk_cairo_set_source_color(cr, color);
+    pango_cairo_show_layout(cr, playout);
 
     cairo_restore(cr);
 }
@@ -3149,7 +3111,7 @@ xfdesktop_icon_view_paint_icon(XfdesktopIconView *icon_view,
 
     playout = icon_view->priv->playout;
 
-    cr = gdk_cairo_create(GDK_DRAWABLE(gtk_widget_get_window(widget)));
+    cr = gdk_cairo_create(gtk_widget_get_window(widget));
     
     if(!xfdesktop_icon_get_extents(icon, &pixbuf_extents,
                                    &text_extents, &total_extents))
@@ -3239,8 +3201,8 @@ xfdesktop_icon_view_paint_icon(XfdesktopIconView *icon_view,
               text_extents.width, text_extents.height,
               text_extents.x, text_extents.y);
 
-        gtk_paint_layout(gtk_widget_get_style(widget), gtk_widget_get_window(widget),
-                         state, FALSE, area, widget, "label",
+        gtk_paint_layout(gtk_widget_get_style(widget), cr,
+                         state, FALSE, widget, "label",
                          text_extents.x, text_extents.y, playout);
     }
 
