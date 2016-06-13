@@ -115,8 +115,8 @@ struct _XfceBackdropPriv
     XfceBackdropImageData *image_data;
 
     XfceBackdropColorStyle color_style;
-    GdkColor color1;
-    GdkColor color2;
+    GdkRGBA color1;
+    GdkRGBA color2;
 
     XfceBackdropImageStyle image_style;
     gchar *image_path;
@@ -172,199 +172,10 @@ static guint backdrop_signals[LAST_SIGNAL] = { 0, };
 
 /* helper functions */
 
-#if !GTK_CHECK_VERSION (3, 0, 0)
-/* pull in gdk_pixbuf_get_from_surface from the future!
- * When we finally flip to Gtk3 delete all this stuff. */
-static cairo_format_t
-gdk_cairo_format_for_content (cairo_content_t content)
-{
-  switch (content)
-    {
-    case CAIRO_CONTENT_COLOR:
-      return CAIRO_FORMAT_RGB24;
-    case CAIRO_CONTENT_ALPHA:
-      return CAIRO_FORMAT_A8;
-    case CAIRO_CONTENT_COLOR_ALPHA:
-    default:
-      return CAIRO_FORMAT_ARGB32;
-    }
-}
-
-static cairo_surface_t *
-gdk_cairo_surface_coerce_to_image (cairo_surface_t *surface,
-                                   cairo_content_t  content,
-                                   int              src_x,
-                                   int              src_y,
-                                   int              width,
-                                   int              height)
-{
-  cairo_surface_t *copy;
-  cairo_t *cr;
-
-  copy = cairo_image_surface_create (gdk_cairo_format_for_content (content),
-                                     width,
-                                     height);
-
-  cr = cairo_create (copy);
-  cairo_set_operator (cr, CAIRO_OPERATOR_SOURCE);
-  cairo_set_source_surface (cr, surface, -src_x, -src_y);
-  cairo_paint (cr);
-  cairo_destroy (cr);
-
-  return copy;
-}
-
-static void
-convert_alpha (guchar *dest_data,
-               int     dest_stride,
-               guchar *src_data,
-               int     src_stride,
-               int     src_x,
-               int     src_y,
-               int     width,
-               int     height)
-{
-  int x, y;
-
-  src_data += src_stride * src_y + src_x * 4;
-
-  for (y = 0; y < height; y++) {
-    guint32 *src = (guint32 *) src_data;
-
-    for (x = 0; x < width; x++) {
-      guint alpha = src[x] >> 24;
-
-      if (alpha == 0)
-        {
-          dest_data[x * 4 + 0] = 0;
-          dest_data[x * 4 + 1] = 0;
-          dest_data[x * 4 + 2] = 0;
-        }
-      else
-        {
-          dest_data[x * 4 + 0] = (((src[x] & 0xff0000) >> 16) * 255 + alpha / 2) / alpha;
-          dest_data[x * 4 + 1] = (((src[x] & 0x00ff00) >>  8) * 255 + alpha / 2) / alpha;
-          dest_data[x * 4 + 2] = (((src[x] & 0x0000ff) >>  0) * 255 + alpha / 2) / alpha;
-        }
-      dest_data[x * 4 + 3] = alpha;
-    }
-
-    src_data += src_stride;
-    dest_data += dest_stride;
-  }
-}
-
-static void
-convert_no_alpha (guchar *dest_data,
-                  int     dest_stride,
-                  guchar *src_data,
-                  int     src_stride,
-                  int     src_x,
-                  int     src_y,
-                  int     width,
-                  int     height)
-{
-  int x, y;
-
-  src_data += src_stride * src_y + src_x * 4;
-
-  for (y = 0; y < height; y++) {
-    guint32 *src = (guint32 *) src_data;
-
-    for (x = 0; x < width; x++) {
-      dest_data[x * 3 + 0] = src[x] >> 16;
-      dest_data[x * 3 + 1] = src[x] >>  8;
-      dest_data[x * 3 + 2] = src[x];
-    }
-
-    src_data += src_stride;
-    dest_data += dest_stride;
-  }
-}
-
-/**
- * gdk_pixbuf_get_from_surface:
- * @surface: surface to copy from
- * @src_x: Source X coordinate within @surface
- * @src_y: Source Y coordinate within @surface
- * @width: Width in pixels of region to get
- * @height: Height in pixels of region to get
- *
- * Transfers image data from a #cairo_surface_t and converts it to an RGB(A)
- * representation inside a #GdkPixbuf. This allows you to efficiently read
- * individual pixels from cairo surfaces. For #GdkWindows, use
- * gdk_pixbuf_get_from_window() instead.
- *
- * This function will create an RGB pixbuf with 8 bits per channel.
- * The pixbuf will contain an alpha channel if the @surface contains one.
- *
- * Returns: (nullable) (transfer full): A newly-created pixbuf with a
- *     reference count of 1, or %NULL on error
- */
 static GdkPixbuf *
-gdk_pixbuf_get_from_surface  (cairo_surface_t *surface,
-                              gint             src_x,
-                              gint             src_y,
-                              gint             width,
-                              gint             height)
-{
-  cairo_content_t content;
-  GdkPixbuf *dest;
-
-  /* General sanity checks */
-  g_return_val_if_fail (surface != NULL, NULL);
-  g_return_val_if_fail (width > 0 && height > 0, NULL);
-
-  content = cairo_surface_get_content (surface) | CAIRO_CONTENT_COLOR;
-  dest = gdk_pixbuf_new (GDK_COLORSPACE_RGB,
-                         !!(content & CAIRO_CONTENT_ALPHA),
-                         8,
-                         width, height);
-
-  if (cairo_surface_get_type (surface) == CAIRO_SURFACE_TYPE_IMAGE &&
-      cairo_image_surface_get_format (surface) == gdk_cairo_format_for_content (content))
-    surface = cairo_surface_reference (surface);
-  else
-    {
-      surface = gdk_cairo_surface_coerce_to_image (surface, content,
-						   src_x, src_y,
-						   width, height);
-      src_x = 0;
-      src_y = 0;
-    }
-  cairo_surface_flush (surface);
-  if (cairo_surface_status (surface) || dest == NULL)
-    {
-      cairo_surface_destroy (surface);
-      return NULL;
-    }
-
-  if (gdk_pixbuf_get_has_alpha (dest))
-    convert_alpha (gdk_pixbuf_get_pixels (dest),
-                   gdk_pixbuf_get_rowstride (dest),
-                   cairo_image_surface_get_data (surface),
-                   cairo_image_surface_get_stride (surface),
-                   src_x, src_y,
-                   width, height);
-  else
-    convert_no_alpha (gdk_pixbuf_get_pixels (dest),
-                      gdk_pixbuf_get_rowstride (dest),
-                      cairo_image_surface_get_data (surface),
-                      cairo_image_surface_get_stride (surface),
-                      src_x, src_y,
-                      width, height);
-
-  cairo_surface_destroy (surface);
-  return dest;
-}
-#endif /* GTK_CHECK_VERSION */
-
-static GdkPixbuf *
-create_solid(GdkColor *color,
+create_solid(GdkRGBA *color,
              gint width,
-             gint height,
-             gboolean has_alpha,
-             gint alpha)
+             gint height)
 {
     GdkWindow *root;
     GdkPixbuf *pix;
@@ -375,14 +186,8 @@ create_solid(GdkColor *color,
     surface = gdk_window_create_similar_surface(root, CAIRO_CONTENT_COLOR_ALPHA, width, height);
     cr = cairo_create(surface);
 
-    if(has_alpha)
-    {
-        cairo_set_source_rgba(cr, (float)color->red/65535.0f, (float)color->green/65535.0f, (float)color->blue/65535.0f, (float)alpha/65535.0f);
-    }
-    else
-    {
-        cairo_set_source_rgb(cr, (float)color->red/65535.0f, (float)color->green/65535.0f, (float)color->blue/65535.0f);
-    }
+    cairo_set_source_rgba(cr, color->red, color->green, color->blue, color->alpha);
+
 
     cairo_rectangle(cr, 0, 0, width, height);
     cairo_fill(cr);
@@ -398,7 +203,7 @@ create_solid(GdkColor *color,
 }
 
 static GdkPixbuf *
-create_gradient(GdkColor *color1, GdkColor *color2, gint width, gint height,
+create_gradient(GdkRGBA *color1, GdkRGBA *color2, gint width, gint height,
         XfceBackdropColorStyle style)
 {
     GdkWindow *root;
@@ -423,8 +228,8 @@ create_gradient(GdkColor *color1, GdkColor *color2, gint width, gint height,
         return NULL;
     }
 
-    cairo_pattern_add_color_stop_rgba (pat, 1, (float)color2->red/65535.0f, (float)color2->green/65535.0f, (float)color2->blue/65535.0f, 1);
-    cairo_pattern_add_color_stop_rgba (pat, 0, (float)color1->red/65535.0f, (float)color1->green/65535.0f, (float)color1->blue/65535.0f, 1);
+    cairo_pattern_add_color_stop_rgba (pat, 1, color2->red, color2->green, color2->blue, color2->alpha);
+    cairo_pattern_add_color_stop_rgba (pat, 0, color1->red, color1->green, color1->blue, color1->alpha);
 
     cairo_rectangle(cr, 0, 0, width, height);
     cairo_set_source(cr, pat);
@@ -928,14 +733,14 @@ xfce_backdrop_class_init(XfceBackdropClass *klass)
                                     g_param_spec_boxed("first-color",
                                                        "first color",
                                                        "first color",
-                                                       GDK_TYPE_COLOR,
+                                                       GDK_TYPE_RGBA,
                                                        XFDESKTOP_PARAM_FLAGS));
 
     g_object_class_install_property(gobject_class, PROP_COLOR2,
                                     g_param_spec_boxed("second-color",
                                                        "second color",
                                                        "second color",
-                                                       GDK_TYPE_COLOR,
+                                                       GDK_TYPE_RGBA,
                                                        XFDESKTOP_PARAM_FLAGS));
 
     /* Defaults to an invalid image style so that
@@ -1004,12 +809,14 @@ xfce_backdrop_init(XfceBackdrop *backdrop)
     backdrop->priv->cycle_timer_id = 0;
 
     /* color defaults */
-    backdrop->priv->color1.red = 0x1515;
-    backdrop->priv->color1.green = 0x2222;
-    backdrop->priv->color1.blue = 0x3333;
-    backdrop->priv->color2.red = 0x1515;
-    backdrop->priv->color2.green = 0x2222;
-    backdrop->priv->color2.blue = 0x3333;
+    backdrop->priv->color1.red = 0.08235f;
+    backdrop->priv->color1.green = 0.13333f;
+    backdrop->priv->color1.blue = 0.2f;
+    backdrop->priv->color1.alpha = 1.0f;
+    backdrop->priv->color2.red = 0.08235f;
+    backdrop->priv->color2.green = 0.13333f;
+    backdrop->priv->color2.blue = 0.2f;
+    backdrop->priv->color2.alpha = 1.0f;
 }
 
 static void
@@ -1048,7 +855,7 @@ xfce_backdrop_set_property(GObject *object,
                            GParamSpec *pspec)
 {
     XfceBackdrop *backdrop = XFCE_BACKDROP(object);
-    GdkColor *color;
+    GdkRGBA *color;
 
     switch(property_id) {
         case PROP_COLOR_STYLE:
@@ -1268,7 +1075,7 @@ xfce_backdrop_get_color_style(XfceBackdrop *backdrop)
 /**
  * xfce_backdrop_set_first_color:
  * @backdrop: An #XfceBackdrop.
- * @color: A #GdkColor.
+ * @color: A #GdkRGBA.
  *
  * Sets the "first" color for the #XfceBackdrop.  This is the color used if
  * the color style is set to XFCE_BACKDROP_COLOR_SOLID.  It is used as the
@@ -1278,35 +1085,38 @@ xfce_backdrop_get_color_style(XfceBackdrop *backdrop)
  **/
 void
 xfce_backdrop_set_first_color(XfceBackdrop *backdrop,
-                              const GdkColor *color)
+                              const GdkRGBA *color)
 {
     g_return_if_fail(XFCE_IS_BACKDROP(backdrop) && color != NULL);
     
     if(color->red != backdrop->priv->color1.red
-            || color->green != backdrop->priv->color1.green
-            || color->blue != backdrop->priv->color1.blue)
+       || color->green != backdrop->priv->color1.green
+       || color->blue != backdrop->priv->color1.blue
+       || color->alpha != backdrop->priv->color1.alpha)
     {
         xfce_backdrop_clear_cached_image(backdrop);
         backdrop->priv->color1.red = color->red;
         backdrop->priv->color1.green = color->green;
         backdrop->priv->color1.blue = color->blue;
+        backdrop->priv->color1.alpha = color->alpha;
+
         g_signal_emit(G_OBJECT(backdrop), backdrop_signals[BACKDROP_CHANGED], 0);
     }
 }
 
 void
 xfce_backdrop_get_first_color(XfceBackdrop *backdrop,
-                              GdkColor *color)
+                              GdkRGBA *color)
 {
     g_return_if_fail(XFCE_IS_BACKDROP(backdrop) && color);
     
-    memcpy(color, &backdrop->priv->color1, sizeof(GdkColor));
+    memcpy(color, &backdrop->priv->color1, sizeof(GdkRGBA));
 }
 
 /**
  * xfce_backdrop_set_second_color:
  * @backdrop: An #XfceBackdrop.
- * @color: A #GdkColor.
+ * @color: A #GdkRGBA.
  *
  * Sets the "second" color for the #XfceBackdrop.  This is the color used as the
  * right-side color or bottom color if the color style is set to
@@ -1315,18 +1125,21 @@ xfce_backdrop_get_first_color(XfceBackdrop *backdrop,
  **/
 void
 xfce_backdrop_set_second_color(XfceBackdrop *backdrop,
-                               const GdkColor *color)
+                               const GdkRGBA *color)
 {
     g_return_if_fail(XFCE_IS_BACKDROP(backdrop) && color != NULL);
     
     if(color->red != backdrop->priv->color2.red
-            || color->green != backdrop->priv->color2.green
-            || color->blue != backdrop->priv->color2.blue)
+       || color->green != backdrop->priv->color2.green
+       || color->blue != backdrop->priv->color2.blue
+       || color->alpha != backdrop->priv->color2.alpha)
     {
         xfce_backdrop_clear_cached_image(backdrop);
         backdrop->priv->color2.red = color->red;
         backdrop->priv->color2.green = color->green;
         backdrop->priv->color2.blue = color->blue;
+        backdrop->priv->color2.alpha = color->alpha;
+
         if(backdrop->priv->color_style != XFCE_BACKDROP_COLOR_SOLID)
             g_signal_emit(G_OBJECT(backdrop), backdrop_signals[BACKDROP_CHANGED], 0);
     }
@@ -1334,11 +1147,11 @@ xfce_backdrop_set_second_color(XfceBackdrop *backdrop,
 
 void
 xfce_backdrop_get_second_color(XfceBackdrop *backdrop,
-                               GdkColor *color)
+                               GdkRGBA *color)
 {
     g_return_if_fail(XFCE_IS_BACKDROP(backdrop) && color);
     
-    memcpy(color, &backdrop->priv->color2, sizeof(GdkColor));
+    memcpy(color, &backdrop->priv->color2, sizeof(GdkRGBA));
 }
 
 /**
@@ -1847,15 +1660,15 @@ xfce_backdrop_generate_canvas(XfceBackdrop *backdrop)
     }
 
     if(backdrop->priv->color_style == XFCE_BACKDROP_COLOR_SOLID)
-        final_image = create_solid(&backdrop->priv->color1, w, h, FALSE, 0xff);
+        final_image = create_solid(&backdrop->priv->color1, w, h);
     else if(backdrop->priv->color_style == XFCE_BACKDROP_COLOR_TRANSPARENT) {
-        GdkColor c = { 0, 0xffff, 0xffff, 0xffff };
-        final_image = create_solid(&c, w, h, TRUE, 0x00);
+        GdkRGBA c = { 1.0f, 1.0f, 1.0f, 1.0f };
+        final_image = create_solid(&c, w, h);
     } else {
         final_image = create_gradient(&backdrop->priv->color1,
                 &backdrop->priv->color2, w, h, backdrop->priv->color_style);
         if(!final_image)
-            final_image = create_solid(&backdrop->priv->color1, w, h, FALSE, 0xff);
+            final_image = create_solid(&backdrop->priv->color1, w, h);
     }
 
     return final_image;
